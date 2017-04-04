@@ -7,10 +7,11 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
+	"camlistore.org/pkg/misc/gpgagent"
 	"github.com/hgfischer/go-otp"
-	"github.com/jcmdev0/gpgagent"
 
 	"golang.org/x/crypto/openpgp"
 )
@@ -72,6 +73,8 @@ func getKeyRing() (*openpgp.EntityList, error) {
 }
 
 func main() {
+	os.Setenv("GPG_AGENT_INFO",
+		"/run/user/"+strconv.FormatInt(int64(os.Getuid()), 10)+"/gnupg/S.gpg-agent:12345:1")
 	myStr := "ZVB267QPFBAGROTDE6US5UN255A5BJAOKAJY2VMU3EZWNYCGKBLIVLJ3QB6N6GWR"
 	encrypt(myStr) // saves myStr to test.gpg
 	log.Println("Reading token from:", "test.gpg")
