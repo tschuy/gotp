@@ -16,20 +16,12 @@ import (
 	"golang.org/x/crypto/openpgp"
 )
 
-// ability to encrypt a file with one gpg key                 [:+1:]
-// ability to encrypt a file with MULTIPLE gpg keys           [:+1:] -- [:-1:]
-// ability to reference keys by id, not by including here     []
-// cli to add a token (and have it automatically encrypted)   []
-// nice listing of all added tokens                           []
-// generate an OTP token from a TOTP token                    [:+1:]
-// generate an OTP token from an HOTP token                    []
-
 var prefix = os.Getenv("HOME")
 var secretKeyring = prefix + "/.gnupg/secring.gpg"
 var publicKeyring = prefix + "/.gnupg/pubring.gpg"
 
 func pr(keys []openpgp.Key, symmetric bool) ([]byte, error) {
-	conn, err := gpgagent.NewGpgAgentConn()
+	conn, err := gpgagent.NewConn()
 	if err != nil {
 		return nil, err
 	}
@@ -72,13 +64,77 @@ func getKeyRing() (*openpgp.EntityList, error) {
 	return &entityList, nil
 }
 
+func getPublicKeyRing() (*openpgp.EntityList, error) {
+	var entityList openpgp.EntityList
+
+	// Open the public key file
+	keyringFileBuffer, err := os.Open(os.Getenv("HOME") + "/.gnupg/pubring.gpg")
+	if err != nil {
+		return nil, err
+	}
+	defer keyringFileBuffer.Close()
+
+	entityList, err = openpgp.ReadKeyRing(keyringFileBuffer)
+	if err != nil {
+		return nil, err
+	}
+
+	return &entityList, nil
+}
+
+func encryptKeys(fingerprints [][]byte) ([]*openpgp.Entity, error) {
+	m := make(map[[20]byte]bool)
+	var tmp [20]byte
+	for _, fingerprint := range fingerprints {
+		copy(tmp[:], fingerprint)
+		m[tmp] = true
+	}
+
+	keyring, err := getPublicKeyRing()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Encrypt message using public key
+	var el []*openpgp.Entity
+
+	for _, key := range *keyring {
+		if key.PrimaryKey != nil {
+			if m[key.PrimaryKey.Fingerprint] {
+				log.Printf("encrypting with key %x", key.PrimaryKey.Fingerprint)
+				el = append(el, key)
+			}
+		}
+	}
+	return el, nil
+}
+
 func main() {
+	// horrible hack
 	os.Setenv("GPG_AGENT_INFO",
 		"/run/user/"+strconv.FormatInt(int64(os.Getuid()), 10)+"/gnupg/S.gpg-agent:12345:1")
 	myStr := "ZVB267QPFBAGROTDE6US5UN255A5BJAOKAJY2VMU3EZWNYCGKBLIVLJ3QB6N6GWR"
-	encrypt(myStr) // saves myStr to test.gpg
-	log.Println("Reading token from:", "test.gpg")
-	res, err := decrypt()
+
+	b1, err := hex.DecodeString("example1")
+	if err != nil {
+		log.Fatal(err)
+	}
+	b2, err := hex.DecodeString("example2")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// encrypt a file using public keys from gpg keyring. identify keys to use
+	// from fingerprints above.
+	el, err := encryptKeys([][]byte{b1, b2})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	encrypt("test.gpg", myStr, el)
+
+	// decrypt file, use result as TOTP token, and generate a token
+	res, err := decrypt("test.gpg")
 
 	if err != nil {
 		log.Fatal(err)
@@ -87,17 +143,17 @@ func main() {
 	log.Print("secret otp key: ", res)
 
 	totp := &otp.TOTP{Secret: res, IsBase32Secret: true}
-	log.Print(totp.Get())
+	fmt.Printf("test.gpg: %s\n", totp.Get())
 }
 
-func decrypt() (string, error) {
+func decrypt(fi string) (string, error) {
 	keyring, err := getKeyRing()
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	f, _ := os.Open("test.gpg")
+	f, _ := os.Open(fi)
 	md, err := openpgp.ReadMessage(f, keyring, pr, nil)
 	if err != nil {
 		return "", err
@@ -112,22 +168,8 @@ func decrypt() (string, error) {
 	return decStr, nil
 }
 
-func encrypt(str string) {
-	keyring, err := getKeyRing()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Encrypt message using public key
+func encrypt(fi string, str string, el openpgp.EntityList) {
 	buf := new(bytes.Buffer)
-	var el []*openpgp.Entity
-
-	for _, key := range *keyring {
-		if key.PrimaryKey != nil {
-			el = append(el, key)
-		}
-	}
-
 	w, err := openpgp.Encrypt(buf, el, nil, nil, nil)
 	if err != nil {
 		log.Fatal(err)
@@ -143,5 +185,5 @@ func encrypt(str string) {
 	}
 
 	bytes, err := ioutil.ReadAll(buf)
-	ioutil.WriteFile("test.gpg", bytes, 0644)
+	ioutil.WriteFile(fi, bytes, 0644)
 }
