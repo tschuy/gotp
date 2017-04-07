@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -10,8 +13,9 @@ import (
 	"strconv"
 	"strings"
 
-	"camlistore.org/pkg/misc/gpgagent"
 	"github.com/hgfischer/go-otp"
+
+	"camlistore.org/pkg/misc/gpgagent"
 
 	"golang.org/x/crypto/openpgp"
 )
@@ -19,6 +23,57 @@ import (
 var prefix = os.Getenv("HOME")
 var secretKeyring = prefix + "/.gnupg/secring.gpg"
 var publicKeyring = prefix + "/.gnupg/pubring.gpg"
+
+type JsonToken struct {
+	Fingerprints []string
+	Token        string
+}
+
+type Token struct {
+	Name           string
+	Fingerprints   [][]byte
+	EncryptedToken []byte
+	Token          string
+}
+
+func fingerStringsToBytes(strings []string) [][]byte {
+	var fingerprints [][]byte
+	for _, print := range strings {
+		b, err := hex.DecodeString(print)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fingerprints = append(fingerprints, b)
+	}
+	return fingerprints
+}
+
+func readToken(dir string, tkName string) Token {
+	f, err := ioutil.ReadFile(dir + "/" + tkName + "/token.json")
+	if err != nil {
+		log.Fatalf("could not read token: %s", err)
+	}
+
+	var jk JsonToken
+	var tk Token
+
+	err = json.Unmarshal(f, &jk)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	tk.Fingerprints = fingerStringsToBytes(jk.Fingerprints)
+
+	encToken, err := base64.StdEncoding.DecodeString(jk.Token)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	tk.EncryptedToken = encToken
+	tk.Name = tkName
+
+	return tk
+}
 
 func pr(keys []openpgp.Key, symmetric bool) ([]byte, error) {
 	conn, err := gpgagent.NewConn()
@@ -113,48 +168,65 @@ func main() {
 	// horrible hack
 	os.Setenv("GPG_AGENT_INFO",
 		"/run/user/"+strconv.FormatInt(int64(os.Getuid()), 10)+"/gnupg/S.gpg-agent:12345:1")
-	myStr := "ZVB267QPFBAGROTDE6US5UN255A5BJAOKAJY2VMU3EZWNYCGKBLIVLJ3QB6N6GWR"
 
-	b1, err := hex.DecodeString("example1")
-	if err != nil {
-		log.Fatal(err)
+	if len(os.Args) > 1 {
+		if os.Args[1] == "enroll" {
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Print("Enter text: ")
+			text, _ := reader.ReadString('\n')
+			writeToken(text, os.Args[2], os.Args[3:])
+		}
+		return
 	}
-	b2, err := hex.DecodeString("example2")
-	if err != nil {
-		log.Fatal(err)
+	log.Print("Reading tokens from ./.tokens...")
+	files, _ := ioutil.ReadDir("./.tokens")
+	for _, f := range files {
+		mode := f.Mode()
+		if mode.IsDir() {
+			tk := readToken("./.tokens", f.Name())
+			decrypted, err := decrypt(tk.EncryptedToken)
+			if err != nil {
+				log.Fatal(err)
+			}
+			totp := &otp.TOTP{Secret: decrypted, IsBase32Secret: true}
+			log.Printf("%s: %s", tk.Name, totp.Get())
+		}
 	}
-
-	// encrypt a file using public keys from gpg keyring. identify keys to use
-	// from fingerprints above.
-	el, err := encryptKeys([][]byte{b1, b2})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	encrypt("test.gpg", myStr, el)
-
-	// decrypt file, use result as TOTP token, and generate a token
-	res, err := decrypt("test.gpg")
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Print("secret otp key: ", res)
-
-	totp := &otp.TOTP{Secret: res, IsBase32Secret: true}
-	fmt.Printf("test.gpg: %s\n", totp.Get())
 }
 
-func decrypt(fi string) (string, error) {
+func writeToken(token string, name string, fingerprints []string) {
+	var jk JsonToken
+	jk.Fingerprints = fingerprints
+	el, err := encryptKeys(fingerStringsToBytes(fingerprints))
+	if err != nil {
+		log.Fatal(err)
+	}
+	jk.Token = encrypt(strings.TrimSpace(token), el)
+	data, err := json.Marshal(jk)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = os.MkdirAll("./.tokens/"+name, 0777)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = ioutil.WriteFile("./.tokens/"+name+"/token.json", data, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func decrypt(encoded []byte) (string, error) {
 	keyring, err := getKeyRing()
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	f, _ := os.Open(fi)
-	md, err := openpgp.ReadMessage(f, keyring, pr, nil)
+	encodedReader := bytes.NewReader(encoded)
+	md, err := openpgp.ReadMessage(encodedReader, keyring, pr, nil)
 	if err != nil {
 		return "", err
 	}
@@ -168,7 +240,7 @@ func decrypt(fi string) (string, error) {
 	return decStr, nil
 }
 
-func encrypt(fi string, str string, el openpgp.EntityList) {
+func encrypt(str string, el openpgp.EntityList) string {
 	buf := new(bytes.Buffer)
 	w, err := openpgp.Encrypt(buf, el, nil, nil, nil)
 	if err != nil {
@@ -185,5 +257,5 @@ func encrypt(fi string, str string, el openpgp.EntityList) {
 	}
 
 	bytes, err := ioutil.ReadAll(buf)
-	ioutil.WriteFile(fi, bytes, 0644)
+	return base64.StdEncoding.EncodeToString(bytes)
 }
