@@ -13,10 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hgfischer/go-otp"
-
 	"camlistore.org/pkg/misc/gpgagent"
-
+	"github.com/hgfischer/go-otp"
 	"golang.org/x/crypto/openpgp"
 )
 
@@ -36,46 +34,90 @@ type Token struct {
 	Token          string
 }
 
-func fingerStringsToBytes(strings []string) [][]byte {
-	var fingerprints [][]byte
-	for _, print := range strings {
-		b, err := hex.DecodeString(print)
-		if err != nil {
-			log.Fatal(err)
+func main() {
+	// horrible hack
+	os.Setenv("GPG_AGENT_INFO",
+		"/run/user/"+strconv.FormatInt(int64(os.Getuid()), 10)+"/gnupg/S.gpg-agent:12345:1")
+
+	if len(os.Args) > 1 {
+		if os.Args[1] == "enroll" {
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Print("Enter text: ")
+			text, _ := reader.ReadString('\n')
+			writeToken(text, os.Args[2], os.Args[3:])
 		}
-		fingerprints = append(fingerprints, b)
+		return
 	}
-	return fingerprints
+
+	log.Print("Reading tokens from ./.tokens...")
+	files, _ := ioutil.ReadDir("./.tokens")
+	for _, f := range files {
+		mode := f.Mode()
+		if mode.IsDir() {
+			tk, err := readToken("./.tokens", f.Name())
+			if err != nil {
+				log.Fatalf("error reading token %s: %s", f.Name(), err)
+			}
+			decrypted, err := decrypt(tk.EncryptedToken)
+			if err != nil {
+				log.Fatal(err)
+			}
+			totp := &otp.TOTP{Secret: string(decrypted), IsBase32Secret: true}
+			log.Printf("%s: %s", tk.Name, totp.Get())
+		}
+	}
 }
 
-func readToken(dir string, tkName string) Token {
-	f, err := ioutil.ReadFile(dir + "/" + tkName + "/token.json")
-	if err != nil {
-		log.Fatalf("could not read token: %s", err)
+// Converts a []string of hex strings into a [][]byte.
+func hexStringsToByteSlices(strings []string) ([][]byte, error) {
+	var byteslices [][]byte
+	for _, str := range strings {
+		b, err := hex.DecodeString(str)
+		if err != nil {
+			return nil, err
+		}
+		byteslices = append(byteslices, b)
 	}
+	return byteslices, nil
+}
 
+// read token tkName from inside tokenstore dir.
+// unmarshals info to return a token with EncryptedToken
+// and Fingerprints info
+func readToken(dir string, tkName string) (Token, error) {
 	var jk JsonToken
 	var tk Token
 
-	err = json.Unmarshal(f, &jk)
+	f, err := ioutil.ReadFile(dir + "/" + tkName + "/token.json")
 	if err != nil {
-		log.Fatal(err)
+		return tk, err
 	}
 
-	tk.Fingerprints = fingerStringsToBytes(jk.Fingerprints)
+	err = json.Unmarshal(f, &jk)
+	if err != nil {
+		return tk, err
+	}
+
+	fingerprints, err := hexStringsToByteSlices(jk.Fingerprints)
+	if err != nil {
+		return tk, err
+	}
+	tk.Fingerprints = fingerprints
 
 	encToken, err := base64.StdEncoding.DecodeString(jk.Token)
 	if err != nil {
-		log.Fatal(err)
+		return tk, err
 	}
 
 	tk.EncryptedToken = encToken
 	tk.Name = tkName
 
-	return tk
+	return tk, nil
 }
 
 func pr(keys []openpgp.Key, symmetric bool) ([]byte, error) {
+	// password request function
+	// returns a password for the openpgp.Encrypt
 	conn, err := gpgagent.NewConn()
 	if err != nil {
 		return nil, err
@@ -101,7 +143,8 @@ func pr(keys []openpgp.Key, symmetric bool) ([]byte, error) {
 	return nil, fmt.Errorf("Unable to find key")
 }
 
-func getKeyRing() (*openpgp.EntityList, error) {
+// returns the private gnupg keystore from disk
+func getPrivateKeyRing() (*openpgp.EntityList, error) {
 	var entityList openpgp.EntityList
 
 	// Open the private key file
@@ -119,6 +162,7 @@ func getKeyRing() (*openpgp.EntityList, error) {
 	return &entityList, nil
 }
 
+// returns the public gnupg keystore from disk
 func getPublicKeyRing() (*openpgp.EntityList, error) {
 	var entityList openpgp.EntityList
 
@@ -137,7 +181,11 @@ func getPublicKeyRing() (*openpgp.EntityList, error) {
 	return &entityList, nil
 }
 
-func encryptKeys(fingerprints [][]byte) ([]*openpgp.Entity, error) {
+// returns list of openpgp Entities from a list of fingerprints.
+// Fingerprints are the full length fingerprint of individual gpg keys.
+// Every primary key in the gpg store is examined.
+// TODO examine child keys
+func keysFromPrints(fingerprints [][]byte) ([]*openpgp.Entity, error) {
 	m := make(map[[20]byte]bool)
 	var tmp [20]byte
 	for _, fingerprint := range fingerprints {
@@ -147,7 +195,7 @@ func encryptKeys(fingerprints [][]byte) ([]*openpgp.Entity, error) {
 
 	keyring, err := getPublicKeyRing()
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	// Encrypt message using public key
@@ -164,98 +212,89 @@ func encryptKeys(fingerprints [][]byte) ([]*openpgp.Entity, error) {
 	return el, nil
 }
 
-func main() {
-	// horrible hack
-	os.Setenv("GPG_AGENT_INFO",
-		"/run/user/"+strconv.FormatInt(int64(os.Getuid()), 10)+"/gnupg/S.gpg-agent:12345:1")
-
-	if len(os.Args) > 1 {
-		if os.Args[1] == "enroll" {
-			reader := bufio.NewReader(os.Stdin)
-			fmt.Print("Enter text: ")
-			text, _ := reader.ReadString('\n')
-			writeToken(text, os.Args[2], os.Args[3:])
-		}
-		return
-	}
-	log.Print("Reading tokens from ./.tokens...")
-	files, _ := ioutil.ReadDir("./.tokens")
-	for _, f := range files {
-		mode := f.Mode()
-		if mode.IsDir() {
-			tk := readToken("./.tokens", f.Name())
-			decrypted, err := decrypt(tk.EncryptedToken)
-			if err != nil {
-				log.Fatal(err)
-			}
-			totp := &otp.TOTP{Secret: decrypted, IsBase32Secret: true}
-			log.Printf("%s: %s", tk.Name, totp.Get())
-		}
-	}
-}
-
-func writeToken(token string, name string, fingerprints []string) {
+// Takes token secret, name, and fingerprints of encrypting keys
+// Find public keys needed, encrypt with all of them, and construct
+// the token. Finally, write the token file.
+func writeToken(token string, name string, fingerprints []string) error {
 	var jk JsonToken
 	jk.Fingerprints = fingerprints
-	el, err := encryptKeys(fingerStringsToBytes(fingerprints))
+	byteFingerprints, err := hexStringsToByteSlices(fingerprints)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	jk.Token = encrypt(strings.TrimSpace(token), el)
+	el, err := keysFromPrints(byteFingerprints)
+	if err != nil {
+		return err
+	}
+	encryptedToken, err := encrypt([]byte(strings.TrimSpace(token)), el)
+	if err != nil {
+		return err
+	}
+	jk.Token = string(encryptedToken)
+
 	data, err := json.Marshal(jk)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	err = os.MkdirAll("./.tokens/"+name, 0777)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	err = ioutil.WriteFile("./.tokens/"+name+"/token.json", data, 0644)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+
+	return nil
 }
 
-func decrypt(encoded []byte) (string, error) {
-	keyring, err := getKeyRing()
-
+// Decrypts encrypted []byte with any available pgp key
+func decrypt(encoded []byte) ([]byte, error) {
+	keyring, err := getPrivateKeyRing()
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	encodedReader := bytes.NewReader(encoded)
 	md, err := openpgp.ReadMessage(encodedReader, keyring, pr, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	bytes, err := ioutil.ReadAll(md.UnverifiedBody)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	decStr := string(bytes)
-
-	return decStr, nil
+	return bytes, nil
 }
 
-func encrypt(str string, el openpgp.EntityList) string {
+// encrypt and base64 encode a source []byte with all keys requested
+func encrypt(src []byte, el openpgp.EntityList) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	w, err := openpgp.Encrypt(buf, el, nil, nil, nil)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	_, err = w.Write([]byte(str))
+	_, err = w.Write(src)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
+
 	err = w.Close()
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	bytes, err := ioutil.ReadAll(buf)
-	return base64.StdEncoding.EncodeToString(bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	// base64 encode
+	dst := make([]byte, base64.StdEncoding.EncodedLen(len(bytes)))
+	base64.StdEncoding.Encode(dst, bytes)
+	return dst, nil
 }
