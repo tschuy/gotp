@@ -21,6 +21,7 @@ import (
 var prefix = os.Getenv("HOME")
 var secretKeyring = prefix + "/.gnupg/secring.gpg"
 var publicKeyring = prefix + "/.gnupg/pubring.gpg"
+var tokenDir = prefix + "/.otptokens"
 
 type JsonToken struct {
 	Fingerprints []string
@@ -49,12 +50,11 @@ func main() {
 		return
 	}
 
-	log.Print("Reading tokens from ./.tokens...")
-	files, _ := ioutil.ReadDir("./.tokens")
+	files, _ := ioutil.ReadDir(tokenDir)
 	for _, f := range files {
 		mode := f.Mode()
 		if mode.IsDir() {
-			tk, err := readToken("./.tokens", f.Name())
+			tk, err := readToken(f.Name())
 			if err != nil {
 				log.Fatalf("error reading token %s: %s", f.Name(), err)
 			}
@@ -63,7 +63,7 @@ func main() {
 				log.Fatal(err)
 			}
 			totp := &otp.TOTP{Secret: string(decrypted), IsBase32Secret: true}
-			log.Printf("%s: %s", tk.Name, totp.Get())
+			fmt.Printf("%s: %s\n", tk.Name, totp.Get())
 		}
 	}
 }
@@ -84,11 +84,11 @@ func hexStringsToByteSlices(strings []string) ([][]byte, error) {
 // read token tkName from inside tokenstore dir.
 // unmarshals info to return a token with EncryptedToken
 // and Fingerprints info
-func readToken(dir string, tkName string) (Token, error) {
+func readToken(tkName string) (Token, error) {
 	var jk JsonToken
 	var tk Token
 
-	f, err := ioutil.ReadFile(dir + "/" + tkName + "/token.json")
+	f, err := ioutil.ReadFile(tokenDir + "/" + tkName + "/token.json")
 	if err != nil {
 		return tk, err
 	}
@@ -148,7 +148,7 @@ func getPrivateKeyRing() (*openpgp.EntityList, error) {
 	var entityList openpgp.EntityList
 
 	// Open the private key file
-	keyringFileBuffer, err := os.Open(os.Getenv("HOME") + "/.gnupg/secring.gpg")
+	keyringFileBuffer, err := os.Open(secretKeyring)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func getPublicKeyRing() (*openpgp.EntityList, error) {
 	var entityList openpgp.EntityList
 
 	// Open the public key file
-	keyringFileBuffer, err := os.Open(os.Getenv("HOME") + "/.gnupg/pubring.gpg")
+	keyringFileBuffer, err := os.Open(publicKeyring)
 	if err != nil {
 		return nil, err
 	}
@@ -237,12 +237,12 @@ func writeToken(token string, name string, fingerprints []string) error {
 		return err
 	}
 
-	err = os.MkdirAll("./.tokens/"+name, 0777)
+	err = os.MkdirAll(tokenDir+"/"+name, 0777)
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile("./.tokens/"+name+"/token.json", data, 0644)
+	err = ioutil.WriteFile(tokenDir+"/"+name+"/token.json", data, 0644)
 	if err != nil {
 		return err
 	}
