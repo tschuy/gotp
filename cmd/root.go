@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"time"
 
 	"github.com/hgfischer/go-otp"
 	"github.com/spf13/cobra"
@@ -31,6 +32,7 @@ var RootCmd = &cobra.Command{
 
 	Run: func(cmd *cobra.Command, args []string) {
 		files, _ := ioutil.ReadDir(tokenDir)
+		fmt.Println(time.Now().Format(time.UnixDate))
 		for _, f := range files {
 			mode := f.Mode()
 			if mode.IsDir() {

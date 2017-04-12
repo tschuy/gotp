@@ -1,14 +1,15 @@
 package cmd
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"os"
+	"log"
 	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
 	"github.com/tschuy/gotp/token"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 var tk, fps string
@@ -20,10 +21,14 @@ var enrollCmd = &cobra.Command{
 	Short: "enroll a new token",
 	Long:  `enroll a new token`,
 	Run: func(cmd *cobra.Command, args []string) {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("Enter text: ")
-		text, _ := reader.ReadString('\n')
-		token.WriteToken(text, tk, fingerprints)
+		fmt.Println("Paste secret: ")
+		byteSecret, err := terminal.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			log.Fatal(err)
+		}
+		strSecret := string(byteSecret)
+		err = token.Verify(strSecret)
+		token.WriteToken(strSecret, tk, fingerprints)
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if tk == "" {

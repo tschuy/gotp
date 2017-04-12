@@ -2,9 +2,11 @@ package token
 
 import (
 	"bytes"
+	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -38,6 +40,17 @@ type Token struct {
 	Fingerprints   [][]byte
 	EncryptedToken []byte
 	Token          string
+}
+
+func Verify(secret string) error {
+	if len(secret) != 40 {
+		return errors.New("invalid secret (wrong length!)")
+	}
+	_, err := base32.StdEncoding.DecodeString(secret)
+	if err != nil {
+		return errors.New("invalid secret (was not base32!)")
+	}
+	return nil
 }
 
 // Converts a []string of hex strings into a [][]byte.
