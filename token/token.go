@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"camlistore.org/pkg/misc/gpgagent"
@@ -36,16 +37,16 @@ type JsonToken struct {
 }
 
 type Token struct {
-	Name           string
-	Fingerprints   [][]byte
-	EncryptedToken []byte
-	Token          string
+	Name            string
+	Fingerprints    [][]byte
+	StrFingerprints []string
+	EncryptedToken  []byte
+	Token           string
+	Hotp            bool
+	Counter         uint64
 }
 
 func Verify(secret string) error {
-	if len(secret) != 40 {
-		return errors.New("invalid secret (wrong length!)")
-	}
 	_, err := base32.StdEncoding.DecodeString(secret)
 	if err != nil {
 		return errors.New("invalid secret (was not base32!)")
@@ -88,6 +89,7 @@ func ReadToken(tkName string) (Token, error) {
 		return tk, err
 	}
 	tk.Fingerprints = fingerprints
+	tk.StrFingerprints = jk.Fingerprints
 
 	encToken, err := base64.StdEncoding.DecodeString(jk.Token)
 	if err != nil {
@@ -96,6 +98,24 @@ func ReadToken(tkName string) (Token, error) {
 
 	tk.EncryptedToken = encToken
 	tk.Name = tkName
+
+	tokenBytes, err := Decrypt(encToken)
+	if err != nil {
+		return tk, err
+	}
+
+	tk.Token = string(tokenBytes)
+	parts := strings.Split(tk.Token, ":")
+	if len(parts) > 1 {
+		counter, err := strconv.ParseUint(parts[0], 10, 64)
+		if err != nil {
+			return tk, err
+		}
+		tk.Counter = counter
+		tk.Hotp = true
+		tk.Token = parts[1]
+	} else {
+	}
 
 	return tk, nil
 }
@@ -200,16 +220,21 @@ func keysFromPrints(fingerprints [][]byte) ([]*openpgp.Entity, error) {
 // Takes token secret, name, and fingerprints of encrypting keys
 // Find public keys needed, encrypt with all of them, and construct
 // the token. Finally, write the token file.
-func WriteToken(token string, name string, fingerprints []string) error {
+func WriteToken(token string, name string, fingerprints []string, hotp bool, counter uint64) error {
 	var jk JsonToken
 	jk.Fingerprints = fingerprints
 	byteFingerprints, err := hexStringsToByteSlices(fingerprints)
 	if err != nil {
 		return err
 	}
+
 	el, err := keysFromPrints(byteFingerprints)
 	if err != nil {
 		return err
+	}
+
+	if hotp {
+		token = strconv.FormatUint(counter, 10) + ":" + token
 	}
 	encryptedToken, err := Encrypt([]byte(strings.TrimSpace(token)), el)
 	if err != nil {

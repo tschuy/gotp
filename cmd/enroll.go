@@ -14,6 +14,8 @@ import (
 
 var tk, fps string
 var fingerprints []string
+var counter uint64
+var hotp bool
 
 // enrollCmd represents the enroll command
 var enrollCmd = &cobra.Command{
@@ -28,7 +30,10 @@ var enrollCmd = &cobra.Command{
 		}
 		strSecret := string(byteSecret)
 		err = token.Verify(strSecret)
-		token.WriteToken(strSecret, tk, fingerprints)
+		if err != nil {
+			log.Fatal(err)
+		}
+		token.WriteToken(strSecret, tk, fingerprints, hotp, counter)
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if tk == "" {
@@ -50,5 +55,6 @@ func init() {
 
 	enrollCmd.Flags().StringVarP(&tk, "token", "t", "", "name of new token")
 	enrollCmd.Flags().StringVarP(&fps, "fingerprints", "f", "", "comma-separated encryption key fingerprints")
-
+	enrollCmd.Flags().Uint64VarP(&counter, "counter", "c", 0, "hotp count")
+	enrollCmd.Flags().BoolVarP(&hotp, "hotp", "", false, "enroll hotp token")
 }

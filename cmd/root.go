@@ -40,12 +40,12 @@ var RootCmd = &cobra.Command{
 				if err != nil {
 					log.Fatalf("error reading token %s: %s", f.Name(), err)
 				}
-				decrypted, err := token.Decrypt(tk.EncryptedToken)
-				if err != nil {
-					log.Fatal(err)
+				if tk.Hotp {
+					fmt.Printf("HOTP: %s\n", tk.Name)
+				} else {
+					totp := &otp.TOTP{Secret: tk.Token, IsBase32Secret: true}
+					fmt.Printf("%s: %s\n", tk.Name, totp.Get())
 				}
-				totp := &otp.TOTP{Secret: string(decrypted), IsBase32Secret: true}
-				fmt.Printf("%s: %s\n", tk.Name, totp.Get())
 			}
 		}
 	},
