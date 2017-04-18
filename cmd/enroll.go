@@ -12,8 +12,9 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
-var tk, fps string
+var tk, fps, ems string
 var fingerprints []string
+var emails []string
 var counter uint64
 var hotp bool
 
@@ -33,18 +34,25 @@ var enrollCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		token.WriteToken(strSecret, tk, fingerprints, hotp, counter)
+		err = token.WriteToken(strSecret, tk, fingerprints, emails, hotp, counter)
+		if err != nil {
+			log.Fatal(err)
+		}
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if tk == "" {
 			return errors.New("--token name is required")
 		}
-		if fps == "" {
-			return errors.New("--fingerprints abc123,def456 is required")
+		if fps != "" {
+			fingerprints = strings.Split(fps, ",")
 		}
-		fingerprints = strings.Split(fps, ",")
-		if len(fingerprints) == 0 {
-			return errors.New("must encrypt with at least one key fingerprint!")
+
+		if ems != "" {
+			emails = strings.Split(ems, ",")
+		}
+
+		if len(fingerprints) == 0 && len(emails) == 0 {
+			return errors.New("must encrypt with at least one key (fingerprint or email)!")
 		}
 		return nil
 	},
@@ -55,6 +63,7 @@ func init() {
 
 	enrollCmd.Flags().StringVarP(&tk, "token", "t", "", "name of new token")
 	enrollCmd.Flags().StringVarP(&fps, "fingerprints", "f", "", "comma-separated encryption key fingerprints")
+	enrollCmd.Flags().StringVarP(&ems, "emails", "e", "", "comma-separated emails for encryption")
 	enrollCmd.Flags().Uint64VarP(&counter, "counter", "c", 0, "hotp count")
 	enrollCmd.Flags().BoolVarP(&hotp, "hotp", "", false, "enroll hotp token")
 }

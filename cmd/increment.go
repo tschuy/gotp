@@ -24,8 +24,8 @@ var incrementCmd = &cobra.Command{
 
 		if tk.Hotp {
 			hotp := &otp.HOTP{Secret: tk.Token, Counter: tk.Counter, IsBase32Secret: true}
-			fmt.Printf("incrementing from %s: %s\n", tk.Name, hotp.Get(), tk.Counter)
-			err = token.WriteToken(tk.Token, tk.Name, tk.StrFingerprints, true, tk.Counter+1)
+			fmt.Printf("incrementing from %s: %s\n", tk.Name, hotp.Get())
+			err = token.WriteToken(tk.Token, tk.Name, tk.StrFingerprints, nil, true, tk.Counter+1)
 			if err != nil {
 				log.Fatal(err)
 			}

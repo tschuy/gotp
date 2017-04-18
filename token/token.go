@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -190,12 +189,16 @@ func getPublicKeyRing() (*openpgp.EntityList, error) {
 // Fingerprints are the full length fingerprint of individual gpg keys.
 // Every primary key in the gpg store is examined.
 // TODO examine child keys
-func keysFromPrints(fingerprints [][]byte) ([]*openpgp.Entity, error) {
-	m := make(map[[20]byte]bool)
+func getKeys(fingerprints [][]byte, emails []string) ([]*openpgp.Entity, error) {
+	m := make(map[[20]byte]bool) // fingerprints
+	e := make(map[string]bool)   // emails
 	var tmp [20]byte
 	for _, fingerprint := range fingerprints {
 		copy(tmp[:], fingerprint)
 		m[tmp] = true
+	}
+	for _, email := range emails {
+		e[email] = true
 	}
 
 	keyring, err := getPublicKeyRing()
@@ -208,8 +211,13 @@ func keysFromPrints(fingerprints [][]byte) ([]*openpgp.Entity, error) {
 
 	for _, key := range *keyring {
 		if key.PrimaryKey != nil {
+			for _, v := range key.Identities {
+				if e[v.UserId.Email] {
+					el = append(el, key)
+					continue
+				}
+			}
 			if m[key.PrimaryKey.Fingerprint] {
-				log.Printf("encrypting with key %x", key.PrimaryKey.Fingerprint)
 				el = append(el, key)
 			}
 		}
@@ -220,18 +228,28 @@ func keysFromPrints(fingerprints [][]byte) ([]*openpgp.Entity, error) {
 // Takes token secret, name, and fingerprints of encrypting keys
 // Find public keys needed, encrypt with all of them, and construct
 // the token. Finally, write the token file.
-func WriteToken(token string, name string, fingerprints []string, hotp bool, counter uint64) error {
+func WriteToken(token string, name string, fingerprints []string, emails []string, hotp bool, counter uint64) error {
 	var jk JsonToken
-	jk.Fingerprints = fingerprints
 	byteFingerprints, err := hexStringsToByteSlices(fingerprints)
 	if err != nil {
 		return err
 	}
 
-	el, err := keysFromPrints(byteFingerprints)
+	el, err := getKeys(byteFingerprints, emails)
 	if err != nil {
 		return err
 	}
+
+	if len(el) != len(fingerprints)+len(emails) {
+		return errors.New("could not find keys for all requested fingerprints and emails")
+	}
+
+	var fps []string
+	for _, key := range el {
+		fps = append(fps, fmt.Sprintf("%x", key.PrimaryKey.Fingerprint))
+	}
+	// converts email addresses into tokens
+	jk.Fingerprints = fps
 
 	if hotp {
 		token = strconv.FormatUint(counter, 10) + ":" + token
