@@ -47,10 +47,24 @@ Wed Apr 12 12:27:06 PDT 2017
 service-name: 153439
 ```
 
+To enroll an `hotp` token, specify `--hotp` and the `--count`:
+
+```
+$ gotp enroll --fingerprints 9D19556E2ED760E41ACA825D902684E89DBCF765 --token hotp-token --hotp --counter 1
+```
+
+To view the value of an HOTP token, use `increment`. This also increments the counter by one:
+
+```
+$ gotp increment -t hotp-token
+Wed Apr 12 12:27:06 PDT 2017
+hotp-token: 535293
+```
+
 Generating Testing Tokens
 -------------------------
 
-OTP secrets are 40-character base32 strings. These can be generated from `/dev/random`:
+OTP secrets are base32 strings. These can be generated from `/dev/random`:
 
 ```
 $ dd if=/dev/random bs=1 count=40 | base32
