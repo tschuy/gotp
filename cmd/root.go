@@ -25,6 +25,16 @@ func getEnvDefault(env string, def string) string {
 	return def
 }
 
+func lengthofLongest(files []os.FileInfo) int {
+	m := 0
+	for _, e := range files {
+		if len(e.Name()) > m {
+			m = len(e.Name())
+		}
+	}
+	return m
+}
+
 var RootCmd = &cobra.Command{
 	Use:   "gotp",
 	Short: "one-time password generation tool",
@@ -33,18 +43,19 @@ var RootCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		files, _ := ioutil.ReadDir(tokenDir)
 		fmt.Println(time.Now().Format(time.UnixDate))
+		longest := lengthofLongest(files)
 		for _, f := range files {
 			mode := f.Mode()
 			if mode.IsDir() {
 				tk, err := token.ReadToken(f.Name())
 				if err != nil {
-					log.Fatalf("error reading token %s: %s", f.Name(), err)
+					log.Fatalf("error reading token %*s: %s", longest, f.Name(), err)
 				}
 				if tk.Hotp {
-					fmt.Printf("HOTP: %s\n", tk.Name)
+					fmt.Printf(" %*s: %s\n", longest, tk.Name, "HOTP")
 				} else {
 					totp := &otp.TOTP{Secret: tk.Token, IsBase32Secret: true}
-					fmt.Printf("%s: %s\n", tk.Name, totp.Get())
+					fmt.Printf(" %*s: %s\n", longest, tk.Name, totp.Get())
 				}
 			}
 		}

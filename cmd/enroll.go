@@ -37,6 +37,8 @@ var enrollCmd = &cobra.Command{
 		err = token.WriteToken(strSecret, tk, fingerprints, emails, hotp, counter)
 		if err != nil {
 			log.Fatal(err)
+		} else {
+			fmt.Printf("Added token %s successfully with %d keys!\n", tk, len(fingerprints)+len(emails))
 		}
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {

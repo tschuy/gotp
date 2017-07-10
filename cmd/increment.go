@@ -14,8 +14,8 @@ var tkName string
 
 var incrementCmd = &cobra.Command{
 	Use:   "increment",
-	Short: "increment an hotp token",
-	Long:  `increment an hotp token`,
+	Short: "increment and view HOTP token",
+	Long:  `increment and view HOTP token`,
 	Run: func(cmd *cobra.Command, args []string) {
 		tk, err := token.ReadToken(tkName)
 		if err != nil {
@@ -24,7 +24,7 @@ var incrementCmd = &cobra.Command{
 
 		if tk.Hotp {
 			hotp := &otp.HOTP{Secret: tk.Token, Counter: tk.Counter, IsBase32Secret: true}
-			fmt.Printf("incrementing from %s: %s\n", tk.Name, hotp.Get())
+			fmt.Printf("incrementing %s: %s\n", tk.Name, hotp.Get())
 			err = token.WriteToken(tk.Token, tk.Name, tk.StrFingerprints, nil, true, tk.Counter+1)
 			if err != nil {
 				log.Fatal(err)

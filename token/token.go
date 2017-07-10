@@ -288,6 +288,10 @@ func Decrypt(encoded []byte) ([]byte, error) {
 	encodedReader := bytes.NewReader(encoded)
 	md, err := openpgp.ReadMessage(encodedReader, keyring, pr, nil)
 	if err != nil {
+		if strings.Contains(err.Error(), "PROGRESS need_entropy") {
+			fmt.Print("gpg-agent needs more entropy; please try again!\n")
+			os.Exit(1)
+		}
 		return nil, err
 	}
 
