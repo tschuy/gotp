@@ -57,7 +57,7 @@ var RootCmd = &cobra.Command{
 					log.Fatalf("error reading token %s: %s", leftPad(f.Name(), longest), err)
 				}
 				if tk.Hotp {
-					fmt.Printf("HOTP: %s\n", leftPad(tk.Name, longest))
+					fmt.Printf("%s: %s\n", leftPad(tk.Name, longest), "HOTP")
 				} else {
 					totp := &otp.TOTP{Secret: tk.Token, IsBase32Secret: true}
 					fmt.Printf("%s: %s\n", leftPad(tk.Name, longest), totp.Get())
