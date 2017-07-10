@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/hgfischer/go-otp"
@@ -36,10 +35,6 @@ func lengthofLongest(files []os.FileInfo) int {
 	return m
 }
 
-func leftPad(str string, length int) string {
-	return strings.Repeat(" ", length-len(str)+1) + str
-}
-
 var RootCmd = &cobra.Command{
 	Use:   "gotp",
 	Short: "one-time password generation tool",
@@ -54,13 +49,13 @@ var RootCmd = &cobra.Command{
 			if mode.IsDir() {
 				tk, err := token.ReadToken(f.Name())
 				if err != nil {
-					log.Fatalf("error reading token %s: %s", leftPad(f.Name(), longest), err)
+					log.Fatalf("error reading token %*s: %s", longest, f.Name(), err)
 				}
 				if tk.Hotp {
-					fmt.Printf("%s: %s\n", leftPad(tk.Name, longest), "HOTP")
+					fmt.Printf(" %*s: %s\n", longest, tk.Name, "HOTP")
 				} else {
 					totp := &otp.TOTP{Secret: tk.Token, IsBase32Secret: true}
-					fmt.Printf("%s: %s\n", leftPad(tk.Name, longest), totp.Get())
+					fmt.Printf(" %*s: %s\n", longest, tk.Name, totp.Get())
 				}
 			}
 		}
