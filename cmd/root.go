@@ -5,25 +5,13 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/hgfischer/go-otp"
 	"github.com/spf13/cobra"
 	"github.com/tschuy/gotp/token"
 )
-
-var prefix = os.Getenv("HOME")
-var gpgHome = getEnvDefault("GNUPGHOME", prefix)
-var secretKeyring = gpgHome + "/.gnupg/secring.gpg"
-var publicKeyring = gpgHome + "/.gnupg/pubring.gpg"
-var tokenDir = prefix + "/.otptokens"
-
-func getEnvDefault(env string, def string) string {
-	if s := os.Getenv(env); s != "" {
-		return s
-	}
-	return def
-}
 
 func lengthofLongest(files []os.FileInfo) int {
 	m := 0
@@ -41,7 +29,7 @@ var RootCmd = &cobra.Command{
 	Long:  `one-time password generation tool`,
 
 	Run: func(cmd *cobra.Command, args []string) {
-		files, _ := ioutil.ReadDir(tokenDir)
+		files, _ := ioutil.ReadDir(token.TokenDir)
 		fmt.Println(time.Now().Format(time.UnixDate))
 		longest := lengthofLongest(files)
 		for _, f := range files {
@@ -49,6 +37,9 @@ var RootCmd = &cobra.Command{
 			if mode.IsDir() {
 				tk, err := token.ReadToken(f.Name())
 				if err != nil {
+					if strings.Contains(err.Error(), "kbx") {
+						log.Fatal("It looks like you may be using a GPGv2 kbx keystore. Unfortunately gotp is only compatible with GPGv1 keystores at this time.")
+					}
 					log.Fatalf("error reading token %*s: %s", longest, f.Name(), err)
 				}
 				if tk.Hotp {

@@ -15,20 +15,12 @@ import (
 
 	"camlistore.org/pkg/misc/gpgagent"
 	"golang.org/x/crypto/openpgp"
+
+	"github.com/tschuy/gotp/gpg"
 )
 
-var prefix = os.Getenv("HOME")
-var gpgHome = getEnvDefault("GNUPGHOME", prefix)
-var secretKeyring = gpgHome + "/.gnupg/secring.gpg"
-var publicKeyring = gpgHome + "/.gnupg/pubring.gpg"
-var tokenDir = prefix + "/.otptokens"
-
-func getEnvDefault(env string, def string) string {
-	if s := os.Getenv(env); s != "" {
-		return s
-	}
-	return def
-}
+// TokenDir is the directory where encrypted json tokens are stored
+var TokenDir = os.Getenv("HOME") + "/.otptokens"
 
 type JsonToken struct {
 	Fingerprints []string
@@ -73,7 +65,7 @@ func ReadToken(tkName string) (Token, error) {
 	var jk JsonToken
 	var tk Token
 
-	f, err := ioutil.ReadFile(tokenDir + "/" + tkName + "/token.json")
+	f, err := ioutil.ReadFile(TokenDir + "/" + tkName + "/token.json")
 	if err != nil {
 		return tk, err
 	}
@@ -147,44 +139,6 @@ func pr(keys []openpgp.Key, symmetric bool) ([]byte, error) {
 	return nil, fmt.Errorf("Unable to find key")
 }
 
-// returns the private gnupg keystore from disk
-func getPrivateKeyRing() (*openpgp.EntityList, error) {
-	var entityList openpgp.EntityList
-
-	// Open the private key file
-	keyringFileBuffer, err := os.Open(secretKeyring)
-	if err != nil {
-		return nil, err
-	}
-	defer keyringFileBuffer.Close()
-
-	entityList, err = openpgp.ReadKeyRing(keyringFileBuffer)
-	if err != nil {
-		return nil, err
-	}
-
-	return &entityList, nil
-}
-
-// returns the public gnupg keystore from disk
-func getPublicKeyRing() (*openpgp.EntityList, error) {
-	var entityList openpgp.EntityList
-
-	// Open the public key file
-	keyringFileBuffer, err := os.Open(publicKeyring)
-	if err != nil {
-		return nil, err
-	}
-	defer keyringFileBuffer.Close()
-
-	entityList, err = openpgp.ReadKeyRing(keyringFileBuffer)
-	if err != nil {
-		return nil, err
-	}
-
-	return &entityList, nil
-}
-
 // returns list of openpgp Entities from a list of fingerprints.
 // Fingerprints are the full length fingerprint of individual gpg keys.
 // Every primary key in the gpg store is examined.
@@ -201,7 +155,7 @@ func getKeys(fingerprints [][]byte, emails []string) ([]*openpgp.Entity, error) 
 		e[email] = true
 	}
 
-	keyring, err := getPublicKeyRing()
+	keyring, err := gpg.GetPublicKeyRing()
 	if err != nil {
 		return nil, err
 	}
@@ -265,12 +219,12 @@ func WriteToken(token string, name string, fingerprints []string, emails []strin
 		return err
 	}
 
-	err = os.MkdirAll(tokenDir+"/"+name, 0777)
+	err = os.MkdirAll(TokenDir+"/"+name, 0777)
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile(tokenDir+"/"+name+"/token.json", data, 0644)
+	err = ioutil.WriteFile(TokenDir+"/"+name+"/token.json", data, 0644)
 	if err != nil {
 		return err
 	}
@@ -280,7 +234,7 @@ func WriteToken(token string, name string, fingerprints []string, emails []strin
 
 // Decrypts encrypted []byte with any available pgp key
 func Decrypt(encoded []byte) ([]byte, error) {
-	keyring, err := getPrivateKeyRing()
+	keyring, err := gpg.GetPrivateKeyRing()
 	if err != nil {
 		return nil, err
 	}
