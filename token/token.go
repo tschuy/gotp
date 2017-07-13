@@ -38,6 +38,9 @@ type Token struct {
 }
 
 func Verify(secret string) error {
+	if secret == "" {
+		return errors.New("hmm, doesn't look like I got anything. Are you using the correct paste buffer?")
+	}
 	_, err := base32.StdEncoding.DecodeString(secret)
 	if err != nil {
 		return errors.New("invalid secret (was not base32!)")
