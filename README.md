@@ -55,6 +55,19 @@ Wed Apr 12 12:27:06 PDT 2017
 hotp-token: 535293
 ```
 
+To delete a token:
+
+```
+$ gotp delete -t another-service
+Are you sure you want to remove token another-service? y/[N] y
+Deleting token another-service...
+Token deleted successfully!
+```
+
+If you wish to remove without prompting, the `--force/-f` parameter removes this check.
+The delete command simply removes the directory `$HOME/.otptokens/[tokenname]`.
+
+
 Generating Testing Tokens
 -------------------------
 

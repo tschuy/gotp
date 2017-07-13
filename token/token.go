@@ -58,8 +58,18 @@ func hexStringsToByteSlices(strings []string) ([][]byte, error) {
 	return byteslices, nil
 }
 
-// read token tkName from inside tokenstore dir.
-// unmarshals info to return a token with EncryptedToken
+// DeleteToken : delete token tkName from disk
+func DeleteToken(tkName string) error {
+	path := TokenDir + "/" + tkName
+	_, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	return os.RemoveAll(path)
+}
+
+// ReadToken : read tkName from inside tokenstore dir and
+// unmarshal info to return a token with EncryptedToken
 // and Fingerprints info
 func ReadToken(tkName string) (Token, error) {
 	var jk JsonToken
