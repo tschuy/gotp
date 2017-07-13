@@ -30,6 +30,7 @@ var enrollCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 		strSecret := string(byteSecret)
+		strSecret = strings.ToUpper(strSecret)
 		err = token.Verify(strSecret)
 		if err != nil {
 			log.Fatal(err)
