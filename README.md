@@ -70,8 +70,7 @@ The delete command simply removes the directory `$HOME/.otptokens/[tokenname]`.
 ### Exporting
 
 Two-factor tokens are commonly shared through QR codes. `gotp` can generate a QR code for
-any token it currently has internally. This requires the tool `qrencode` to be installed
-(it can be installed through your package manager, or gotten from the [`qrencode` website](https://fukuchi.org/works/qrencode)).
+any token it currently has internally.
 
 **The exported token contains the secret key and service name. Treat it carefully!**
 

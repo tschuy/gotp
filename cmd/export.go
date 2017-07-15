@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os/exec"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/tschuy/gotp/token"
+
+	"github.com/qpliu/qrencode-go/qrencode"
 )
 
 var exportCmd = &cobra.Command{
@@ -27,16 +29,11 @@ var exportCmd = &cobra.Command{
 			str = fmt.Sprintf("otpauth://totp/%s?secret=%s", tk.Name, tk.Token)
 		}
 
-		// TODO use a golang library that can do the text qr generation itself
-		// qrencode is not a default nor *particularly* common
-		disp := exec.Command("qrencode", str, "-t", "utf8")
-		out, err := disp.Output()
+		grid, err := qrencode.Encode(str, qrencode.ECLevelL)
 		if err != nil {
-			log.Fatal("Could not generate QR code. Do you have qrencode installed?")
+			panic(err)
 		}
-
-		fmt.Printf("%s", out)
-		disp.Wait()
+		grid.TerminalOutput(os.Stdout)
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if tkName == "" {
