@@ -26,6 +26,7 @@ Usage
 `gotp` encrypts tokens with one or more GPG key. Keys can be specified with either
 a key's 20-byte fingerprint or with the email associated with the key.
 
+### Enrolling
 Enrolling a token is simple. The enroll command takes several parameters:
 * `--token`: the name of the token being enrolled (ex: `github`, `dropbox`)
 * `--emails`: a comma-separated list of emails identifying GPG keys. The first matching GPG key is used; if in doubt, specify using the key's fingerprint. (ex: `me@company.com,coworker@company.com`)
@@ -47,7 +48,9 @@ Mon Jul 10 14:26:49 PDT 2017
  another-service: 961126
 ```
 
-To view the value of an HOTP token, use `increment`. This also increments the counter by one:
+### HOTP
+After enrolling a token as shown above, the current token value can be shown with `increment`.
+This also increments the counter by one:
 
 ```
 $ gotp increment -t hotp-token
@@ -55,6 +58,7 @@ Wed Apr 12 12:27:06 PDT 2017
 hotp-token: 535293
 ```
 
+### Deleting
 To delete a token:
 
 ```
@@ -67,6 +71,30 @@ Token deleted successfully!
 If you wish to remove without prompting, the `--force/-f` parameter removes this check.
 The delete command simply removes the directory `$HOME/.otptokens/[tokenname]`.
 
+Serving over HTTP
+-----------------
+`gotp` comes with an HTTP server. It is designed for using behind some kind of auth proxy
+(such as [oauth2_proxy](https://github.com/bitly/oauth2_proxy)) By serving tokens
+over authenticated HTTP, a team of people can make use of two-factor authentication
+on a shared account *and* revoke access to individuals, without needing to rotate the secret.
+
+To start the HTTP server:
+```
+$ gotp serve
+2017/07/14 16:11:23 Starting HTTP server...
+```
+
+In a separate terminal window:
+```
+$ curl http://localhost:8080/tokens/my-fav-service
+279790
+```
+
+**Note:** because `gotp` prompts for the GPG key upon attempted decryption of a token,
+it will either be necessary to set `gpg-agent` to never forget the key password, or
+to use an unencrypted GPG key.
+
+**TODO:** Verify that it doesn't prompt if you use an unecrypted key.
 
 Generating Testing Tokens
 -------------------------
