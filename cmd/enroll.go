@@ -24,7 +24,7 @@ var enrollCmd = &cobra.Command{
 	Short: "enroll a new token",
 	Long:  `enroll a new token`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Paste secret: ")
+		fmt.Print("Paste secret: ")
 		byteSecret, err := terminal.ReadPassword(int(syscall.Stdin))
 		if err != nil {
 			log.Fatal(err)
