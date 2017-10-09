@@ -67,6 +67,17 @@ Token deleted successfully!
 If you wish to remove without prompting, the `--force/-f` parameter removes this check.
 The delete command simply removes the directory `$HOME/.otptokens/[tokenname]`.
 
+### Exporting
+
+Two-factor tokens are commonly shared through QR codes. `gotp` can generate a QR code for
+any token it currently has internally.
+
+**The exported token contains the secret key and service name. Treat it carefully!**
+
+```
+$ gotp export -t my-token
+(pretty unicode qr code here)
+```
 
 Generating Testing Tokens
 -------------------------
