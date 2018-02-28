@@ -33,6 +33,8 @@ Enrolling a token is simple. The enroll command takes several parameters:
 
 If you are enrolling an HOTP token, then be sure to pass the `--hotp` flag and the `--counter` flag (default: 0).
 
+You can also specify which directory to store tokens in with the `--token-directory` flag.
+
 Examples:
 ```
 $ gotp enroll --fingerprints 2187... --emails username@company.com --token another-service
@@ -45,6 +47,14 @@ Now, the token is available for use:
 $ gotp
 Mon Jul 10 14:26:49 PDT 2017
  another-service: 961126
+```
+
+If you have multiple tokens and only wish to see one (for use in scripts, etc), you can use the
+`single` command:
+
+```
+$ gotp single -t my-fav-service
+547353
 ```
 
 To view the value of an HOTP token, use `increment`. This also increments the counter by one:
