@@ -39,8 +39,11 @@ func Verify(secret string) error {
 	if secret == "" {
 		return errors.New("hmm, doesn't look like I got anything. Are you using the correct paste buffer?")
 	}
-	_, err := base32.StdEncoding.DecodeString(secret)
-	if err != nil {
+	// Google says the badding 'should be omitted', but it doesn't say it must be, so we need to support both.
+	// https://github.com/google/google-authenticator/wiki/Key-Uri-Format#secret
+	_, err1 := base32.StdEncoding.DecodeString(secret)
+	_, err2 := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
+	if err1 != nil && err2 != nil {
 		return errors.New("invalid secret (was not base32!)")
 	}
 	return nil
