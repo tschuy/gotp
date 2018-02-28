@@ -10,6 +10,7 @@ import (
 
 	"github.com/hgfischer/go-otp"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/tschuy/gotp/token"
 )
 
@@ -29,7 +30,7 @@ var RootCmd = &cobra.Command{
 	Long:  `one-time password generation tool`,
 
 	Run: func(cmd *cobra.Command, args []string) {
-		files, _ := ioutil.ReadDir(token.TokenDir)
+		files, _ := ioutil.ReadDir(viper.GetString("token-directory"))
 		fmt.Println(time.Now().Format(time.UnixDate))
 		longest := lengthofLongest(files)
 		for _, f := range files {
@@ -58,4 +59,11 @@ func Execute() {
 		fmt.Println(err)
 		os.Exit(-1)
 	}
+}
+
+func init() {
+	RootCmd.PersistentFlags().StringP("token-directory", "d", "~/.otptokens", "the directory where tokens are stored")
+
+	viper.SetDefault("token-directory", os.Getenv("HOME")+"/.otptokens")
+	viper.BindPFlag("token-directory", RootCmd.PersistentFlags().Lookup("token-directory"))
 }

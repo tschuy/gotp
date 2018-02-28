@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"log"
 
@@ -44,12 +43,6 @@ var deleteCmd = &cobra.Command{
 			fmt.Println("Token deleted successfully!")
 		}
 	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if tk == "" {
-			return errors.New("--token name is required")
-		}
-		return nil
-	},
 }
 
 func init() {
@@ -57,4 +50,5 @@ func init() {
 
 	deleteCmd.Flags().StringVarP(&tk, "token", "t", "", "name of token")
 	deleteCmd.Flags().BoolVarP(&f, "force", "f", false, "force removal (do not prompt)")
+	deleteCmd.MarkFlagRequired("token")
 }

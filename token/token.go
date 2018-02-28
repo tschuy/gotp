@@ -16,11 +16,9 @@ import (
 	"camlistore.org/pkg/misc/gpgagent"
 	"golang.org/x/crypto/openpgp"
 
+	"github.com/spf13/viper"
 	"github.com/tschuy/gotp/gpg"
 )
-
-// TokenDir is the directory where encrypted json tokens are stored
-var TokenDir = os.Getenv("HOME") + "/.otptokens"
 
 type JsonToken struct {
 	Fingerprints []string
@@ -63,7 +61,7 @@ func hexStringsToByteSlices(strings []string) ([][]byte, error) {
 
 // DeleteToken : delete token tkName from disk
 func DeleteToken(tkName string) error {
-	path := TokenDir + "/" + tkName
+	path := viper.GetString("token-directory") + "/" + tkName
 	_, err := os.Stat(path)
 	if err != nil {
 		return err
@@ -78,7 +76,7 @@ func ReadToken(tkName string) (Token, error) {
 	var jk JsonToken
 	var tk Token
 
-	f, err := ioutil.ReadFile(TokenDir + "/" + tkName + "/token.json")
+	f, err := ioutil.ReadFile(viper.GetString("token-directory") + "/" + tkName + "/token.json")
 	if err != nil {
 		return tk, err
 	}
@@ -232,12 +230,12 @@ func WriteToken(token string, name string, fingerprints []string, emails []strin
 		return err
 	}
 
-	err = os.MkdirAll(TokenDir+"/"+name, 0777)
+	err = os.MkdirAll(viper.GetString("token-directory")+"/"+name, 0777)
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile(TokenDir+"/"+name+"/token.json", data, 0644)
+	err = ioutil.WriteFile(viper.GetString("token-directory")+"/"+name+"/token.json", data, 0644)
 	if err != nil {
 		return err
 	}

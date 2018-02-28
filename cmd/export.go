@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -35,15 +34,10 @@ var exportCmd = &cobra.Command{
 		}
 		grid.TerminalOutput(os.Stdout)
 	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if tkName == "" {
-			return errors.New("--token name is required")
-		}
-		return nil
-	},
 }
 
 func init() {
 	RootCmd.AddCommand(exportCmd)
 	exportCmd.Flags().StringVarP(&tkName, "token", "t", "", "name of token to export")
+	exportCmd.MarkFlagRequired("token")
 }

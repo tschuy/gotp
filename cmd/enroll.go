@@ -43,9 +43,6 @@ var enrollCmd = &cobra.Command{
 		}
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if tk == "" {
-			return errors.New("--token name is required")
-		}
 		if fps != "" {
 			fingerprints = strings.Split(fps, ",")
 		}
@@ -69,4 +66,5 @@ func init() {
 	enrollCmd.Flags().StringVarP(&ems, "emails", "e", "", "comma-separated emails for encryption")
 	enrollCmd.Flags().Uint64VarP(&counter, "counter", "c", 0, "hotp count")
 	enrollCmd.Flags().BoolVarP(&hotp, "hotp", "", false, "enroll hotp token")
+	enrollCmd.MarkFlagRequired("token")
 }
