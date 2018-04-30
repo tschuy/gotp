@@ -44,6 +44,7 @@ var enrollCmd = &cobra.Command{
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if fps != "" {
+			fps = strings.Replace(fps, " ", "", -1)
 			fingerprints = strings.Split(fps, ",")
 		}
 
