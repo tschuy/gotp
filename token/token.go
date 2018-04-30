@@ -10,8 +10,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 
 	"camlistore.org/pkg/misc/gpgagent"
 	"golang.org/x/crypto/openpgp"
@@ -246,8 +248,36 @@ func WriteToken(token string, name string, fingerprints []string, emails []strin
 	return nil
 }
 
+var (
+	lookupGPGCmd sync.Once
+	hasGPGCmd    bool
+)
+
+func hasGPG() bool {
+	lookupGPGCmd.Do(func() {
+		_, err := exec.LookPath("gpg")
+		hasGPGCmd = err == nil
+	})
+	return hasGPGCmd
+}
+
 // Decrypts encrypted []byte with any available pgp key
 func Decrypt(encoded []byte) ([]byte, error) {
+	if hasGPG() {
+		var stderr, stdout bytes.Buffer
+		cmd := exec.Command("gpg", "--decrypt")
+		cmd.Stdin = bytes.NewReader(encoded)
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			if stderr.Len() == 0 {
+				return nil, fmt.Errorf("gpg --decrypt: %v", err)
+			}
+			return nil, fmt.Errorf("gpg --decrypt: %v: %s", err, &stderr)
+		}
+		return stdout.Bytes(), nil
+	}
+
 	keyring, err := gpg.GetPrivateKeyRing()
 	if err != nil {
 		return nil, err
